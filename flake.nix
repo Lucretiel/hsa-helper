@@ -8,7 +8,7 @@
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    beads.url = "github:steveyegge/beads";
+    beads.url = "github:steveyegge/beads/v0.49.1";
   };
 
   outputs = { self, nixpkgs, flake-utils, rust-overlay, beads }:
