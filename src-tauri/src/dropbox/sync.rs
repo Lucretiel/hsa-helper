@@ -14,10 +14,6 @@ impl DropboxSync {
         Self { client }
     }
 
-    pub fn client(&self) -> &DropboxClient {
-        &self.client
-    }
-
     pub async fn ensure_folders(&self) -> Result<(), ClientError> {
         self.client.create_folder("/Apps").await.ok();
         self.client.create_folder("/Apps/HSAHelper").await.ok();
@@ -111,9 +107,7 @@ impl DropboxSync {
 
     pub async fn upload_receipt(&self, receipt_id: &str, data: &[u8]) -> Result<(), ClientError> {
         let path = format!("{}/{}.pdf", RECEIPTS_PATH, receipt_id);
-        self.client
-            .upload_file(&path, data, WriteMode::Add)
-            .await?;
+        self.client.upload_file(&path, data, WriteMode::Add).await?;
         Ok(())
     }
 
@@ -121,11 +115,6 @@ impl DropboxSync {
         let path = format!("{}/{}.pdf", RECEIPTS_PATH, receipt_id);
         let (data, _) = self.client.download_file(&path).await?;
         Ok(data)
-    }
-
-    pub async fn delete_receipt(&self, receipt_id: &str) -> Result<(), ClientError> {
-        let path = format!("{}/{}.pdf", RECEIPTS_PATH, receipt_id);
-        self.client.delete_file(&path).await
     }
 }
 

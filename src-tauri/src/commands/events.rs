@@ -11,7 +11,10 @@ pub async fn get_events(state: State<'_, DropboxState>) -> Result<Vec<HsaEvent>,
 }
 
 #[tauri::command]
-pub async fn add_event(event: NewEvent, state: State<'_, DropboxState>) -> Result<HsaEvent, String> {
+pub async fn add_event(
+    event: NewEvent,
+    state: State<'_, DropboxState>,
+) -> Result<HsaEvent, String> {
     let guard = state.sync.lock().await;
     let sync = guard.as_ref().ok_or("Not connected to Dropbox")?;
 
@@ -23,7 +26,9 @@ pub async fn add_event(event: NewEvent, state: State<'_, DropboxState>) -> Resul
     metadata.events.push(new_event.clone());
 
     // Save back to Dropbox
-    sync.save_metadata(&metadata).await.map_err(|e| e.to_string())?;
+    sync.save_metadata(&metadata)
+        .await
+        .map_err(|e| e.to_string())?;
 
     Ok(new_event)
 }
@@ -44,7 +49,9 @@ pub async fn delete_event(id: String, state: State<'_, DropboxState>) -> Result<
     }
 
     // Save back to Dropbox
-    sync.save_metadata(&metadata).await.map_err(|e| e.to_string())?;
+    sync.save_metadata(&metadata)
+        .await
+        .map_err(|e| e.to_string())?;
 
     Ok(())
 }

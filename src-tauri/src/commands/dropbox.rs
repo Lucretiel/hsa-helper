@@ -1,5 +1,5 @@
-use crate::dropbox::{DropboxAuth, DropboxClient};
 use crate::dropbox::sync::DropboxSync;
+use crate::dropbox::{DropboxAuth, DropboxClient};
 use crate::models::event::HsaMetadata;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
@@ -21,16 +21,6 @@ impl DropboxState {
 
     pub fn auth(&self) -> &DropboxAuth {
         &self.auth
-    }
-
-    pub async fn initialize(&self) -> Result<(), String> {
-        if self.auth.is_authenticated() {
-            let client = DropboxClient::new(DropboxAuth::new());
-            let sync = DropboxSync::new(client);
-            sync.ensure_folders().await.map_err(|e| e.to_string())?;
-            *self.sync.lock().await = Some(sync);
-        }
-        Ok(())
     }
 }
 
@@ -56,7 +46,11 @@ pub async fn start_oauth_flow(
     let oauth_window = WebviewWindowBuilder::new(
         &app,
         "oauth",
-        WebviewUrl::External(auth_url.parse().map_err(|e: url::ParseError| e.to_string())?),
+        WebviewUrl::External(
+            auth_url
+                .parse()
+                .map_err(|e: url::ParseError| e.to_string())?,
+        ),
     )
     .title("Connect to Dropbox")
     .inner_size(500.0, 700.0)
@@ -145,9 +139,7 @@ pub async fn logout(state: State<'_, DropboxState>) -> Result<(), String> {
 #[tauri::command]
 pub async fn sync_metadata(state: State<'_, DropboxState>) -> Result<HsaMetadata, String> {
     let guard = state.sync.lock().await;
-    let sync = guard
-        .as_ref()
-        .ok_or("Not connected to Dropbox")?;
+    let sync = guard.as_ref().ok_or("Not connected to Dropbox")?;
 
     sync.fetch_metadata().await.map_err(|e| e.to_string())
 }
@@ -158,11 +150,11 @@ pub async fn save_metadata(
     state: State<'_, DropboxState>,
 ) -> Result<HsaMetadata, String> {
     let guard = state.sync.lock().await;
-    let sync = guard
-        .as_ref()
-        .ok_or("Not connected to Dropbox")?;
+    let sync = guard.as_ref().ok_or("Not connected to Dropbox")?;
 
-    sync.save_metadata(&metadata).await.map_err(|e| e.to_string())
+    sync.save_metadata(&metadata)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -172,9 +164,7 @@ pub async fn upload_receipt(
     state: State<'_, DropboxState>,
 ) -> Result<(), String> {
     let guard = state.sync.lock().await;
-    let sync = guard
-        .as_ref()
-        .ok_or("Not connected to Dropbox")?;
+    let sync = guard.as_ref().ok_or("Not connected to Dropbox")?;
 
     sync.upload_receipt(&receipt_id, &data)
         .await
@@ -187,9 +177,7 @@ pub async fn download_receipt(
     state: State<'_, DropboxState>,
 ) -> Result<Vec<u8>, String> {
     let guard = state.sync.lock().await;
-    let sync = guard
-        .as_ref()
-        .ok_or("Not connected to Dropbox")?;
+    let sync = guard.as_ref().ok_or("Not connected to Dropbox")?;
 
     sync.download_receipt(&receipt_id)
         .await

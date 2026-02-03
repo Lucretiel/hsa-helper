@@ -68,7 +68,8 @@ impl DropboxAuth {
         let code_challenge = generate_code_challenge(&code_verifier);
 
         // Request scopes needed for file operations
-        let scopes = "files.content.write files.content.read files.metadata.write files.metadata.read";
+        let scopes =
+            "files.content.write files.content.read files.metadata.write files.metadata.read";
 
         let url = format!(
             "https://www.dropbox.com/oauth2/authorize?\
@@ -140,9 +141,7 @@ impl DropboxAuth {
     pub async fn refresh_token(&self) -> Result<TokenInfo, AuthError> {
         let client_id = self.get_client_id();
         let current = self.load_tokens()?;
-        let refresh_token = current
-            .refresh_token
-            .ok_or(AuthError::NotAuthenticated)?;
+        let refresh_token = current.refresh_token.ok_or(AuthError::NotAuthenticated)?;
 
         let client = reqwest::Client::new();
         let response = client
@@ -188,8 +187,7 @@ impl DropboxAuth {
 
     pub fn load_tokens(&self) -> Result<TokenInfo, AuthError> {
         let path = get_tokens_path()?;
-        let contents = fs::read_to_string(&path)
-            .map_err(|_| AuthError::NotAuthenticated)?;
+        let contents = fs::read_to_string(&path).map_err(|_| AuthError::NotAuthenticated)?;
         serde_json::from_str(&contents).map_err(AuthError::Json)
     }
 
@@ -203,7 +201,9 @@ impl DropboxAuth {
         let verify = fs::read_to_string(&path)
             .map_err(|e| AuthError::Storage(format!("Token verification read failed: {}", e)))?;
         if verify != json {
-            return Err(AuthError::Storage("Token verification failed: stored data doesn't match".into()));
+            return Err(AuthError::Storage(
+                "Token verification failed: stored data doesn't match".into(),
+            ));
         }
 
         Ok(())

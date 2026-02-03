@@ -2,12 +2,12 @@ mod commands;
 mod dropbox;
 mod models;
 
-use tauri::Manager;
 use commands::dropbox::{
-    download_receipt, is_authenticated, logout, save_metadata, start_oauth_flow,
-    sync_metadata, upload_receipt, DropboxState,
+    download_receipt, is_authenticated, logout, save_metadata, start_oauth_flow, sync_metadata,
+    upload_receipt, DropboxState,
 };
 use commands::events::{add_event, delete_event, get_events};
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

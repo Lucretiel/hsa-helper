@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -146,18 +145,6 @@ impl Default for HsaMetadata {
             last_modified: chrono::Utc::now().to_rfc3339(),
             sync_token: None,
             events: Vec::new(),
-        }
-    }
-}
-
-pub struct AppState {
-    pub metadata: Mutex<HsaMetadata>,
-}
-
-impl AppState {
-    pub fn new() -> Self {
-        Self {
-            metadata: Mutex::new(HsaMetadata::default()),
         }
     }
 }

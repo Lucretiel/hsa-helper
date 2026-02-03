@@ -42,10 +42,6 @@ impl DropboxClient {
         }
     }
 
-    pub fn auth(&self) -> &DropboxAuth {
-        &self.auth
-    }
-
     async fn get_token(&self) -> Result<String, ClientError> {
         Ok(self.auth.get_valid_token().await?)
     }
@@ -136,34 +132,6 @@ impl DropboxClient {
 
         let metadata: FileMetadata = response.json().await?;
         Ok(metadata)
-    }
-
-    pub async fn delete_file(&self, path: &str) -> Result<(), ClientError> {
-        let token = self.get_token().await?;
-
-        let response = self
-            .http
-            .post(format!("{}/files/delete_v2", DROPBOX_API_BASE))
-            .header("Authorization", format!("Bearer {}", token))
-            .header("Content-Type", "application/json")
-            .json(&serde_json::json!({ "path": path }))
-            .send()
-            .await?;
-
-        if response.status().as_u16() == 409 {
-            let error_text = response.text().await?;
-            if error_text.contains("not_found") {
-                return Ok(()); // Already deleted
-            }
-            return Err(ClientError::Api(error_text));
-        }
-
-        if !response.status().is_success() {
-            let error_text = response.text().await?;
-            return Err(ClientError::Api(error_text));
-        }
-
-        Ok(())
     }
 
     pub async fn create_folder(&self, path: &str) -> Result<(), ClientError> {
