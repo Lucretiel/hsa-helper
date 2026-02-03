@@ -13,6 +13,14 @@ export async function deleteEvent(id: string): Promise<void> {
   return invoke("delete_event", { id });
 }
 
+export async function hasAppKey(): Promise<boolean> {
+  return invoke<boolean>("has_app_key");
+}
+
+export async function setAppKey(appKey: string): Promise<void> {
+  return invoke("set_app_key", { appKey });
+}
+
 export async function isAuthenticated(): Promise<boolean> {
   return invoke<boolean>("is_authenticated");
 }

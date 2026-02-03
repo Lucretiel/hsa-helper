@@ -475,3 +475,42 @@ body {
   min-width: 4rem;
   text-align: center;
 }
+
+.setup-instructions {
+  background: var(--bg-secondary);
+  padding: 1rem;
+  border-radius: 4px;
+  margin-bottom: 1.5rem;
+}
+
+.setup-instructions h3 {
+  font-size: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.setup-instructions ol {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.setup-instructions li {
+  margin-bottom: 0.5rem;
+  color: var(--text-secondary);
+}
+
+.setup-instructions a {
+  color: var(--accent);
+}
+
+.setup-instructions code {
+  background: var(--bg-card);
+  padding: 0.125rem 0.375rem;
+  border-radius: 2px;
+  font-size: 0.8rem;
+}
+
+.auth-footer {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}

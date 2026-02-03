@@ -35,8 +35,18 @@ impl DropboxState {
 }
 
 #[tauri::command]
-pub fn get_auth_url(redirect_uri: String, state: State<DropboxState>) -> String {
-    state.auth().generate_auth_url(&redirect_uri)
+pub fn has_app_key() -> bool {
+    DropboxAuth::has_app_key()
+}
+
+#[tauri::command]
+pub fn set_app_key(app_key: String) -> Result<(), String> {
+    DropboxAuth::set_app_key(&app_key).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_auth_url(redirect_uri: String, state: State<DropboxState>) -> Result<String, String> {
+    state.auth().generate_auth_url(&redirect_uri).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

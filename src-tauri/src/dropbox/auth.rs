@@ -7,12 +7,14 @@ use thiserror::Error;
 
 const KEYRING_SERVICE: &str = "hsa-helper";
 const KEYRING_USER: &str = "dropbox-tokens";
-const DROPBOX_CLIENT_ID: &str = "YOUR_DROPBOX_APP_KEY"; // User must configure this
+const KEYRING_APP_KEY: &str = "dropbox-app-key";
 
 #[derive(Debug, Error)]
 pub enum AuthError {
     #[error("Not authenticated")]
     NotAuthenticated,
+    #[error("App key not configured")]
+    AppKeyNotConfigured,
     #[error("Keyring error: {0}")]
     Keyring(String),
     #[error("HTTP error: {0}")]
@@ -32,30 +34,52 @@ pub struct TokenInfo {
 
 pub struct DropboxAuth {
     pending_verifier: Mutex<Option<String>>,
-    client_id: String,
 }
 
 impl DropboxAuth {
     pub fn new() -> Self {
         Self {
             pending_verifier: Mutex::new(None),
-            client_id: std::env::var("DROPBOX_APP_KEY")
-                .unwrap_or_else(|_| DROPBOX_CLIENT_ID.to_string()),
         }
     }
 
-    pub fn get_client_id(&self) -> &str {
-        &self.client_id
+    pub fn get_app_key() -> Result<String, AuthError> {
+        let entry = Entry::new(KEYRING_SERVICE, KEYRING_APP_KEY)
+            .map_err(|e| AuthError::Keyring(e.to_string()))?;
+
+        entry
+            .get_password()
+            .map_err(|_| AuthError::AppKeyNotConfigured)
     }
 
-    pub fn generate_auth_url(&self, redirect_uri: &str) -> String {
+    pub fn set_app_key(app_key: &str) -> Result<(), AuthError> {
+        let entry = Entry::new(KEYRING_SERVICE, KEYRING_APP_KEY)
+            .map_err(|e| AuthError::Keyring(e.to_string()))?;
+
+        entry
+            .set_password(app_key)
+            .map_err(|e| AuthError::Keyring(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub fn has_app_key() -> bool {
+        Self::get_app_key().is_ok()
+    }
+
+    fn get_client_id(&self) -> Result<String, AuthError> {
+        Self::get_app_key()
+    }
+
+    pub fn generate_auth_url(&self, redirect_uri: &str) -> Result<String, AuthError> {
+        let client_id = self.get_client_id()?;
         let code_verifier = generate_code_verifier();
         let code_challenge = generate_code_challenge(&code_verifier);
 
         // Store verifier for later token exchange
         *self.pending_verifier.lock().unwrap() = Some(code_verifier);
 
-        format!(
+        Ok(format!(
             "https://www.dropbox.com/oauth2/authorize?\
             client_id={}&\
             response_type=code&\
@@ -63,10 +87,10 @@ impl DropboxAuth {
             code_challenge_method=S256&\
             redirect_uri={}&\
             token_access_type=offline",
-            self.client_id,
+            client_id,
             code_challenge,
             urlencoding::encode(redirect_uri)
-        )
+        ))
     }
 
     pub async fn exchange_code(
@@ -74,6 +98,7 @@ impl DropboxAuth {
         code: &str,
         redirect_uri: &str,
     ) -> Result<TokenInfo, AuthError> {
+        let client_id = self.get_client_id()?;
         let verifier = self
             .pending_verifier
             .lock()
@@ -87,7 +112,7 @@ impl DropboxAuth {
             .form(&[
                 ("code", code),
                 ("grant_type", "authorization_code"),
-                ("client_id", &self.client_id),
+                ("client_id", &client_id),
                 ("code_verifier", &verifier),
                 ("redirect_uri", redirect_uri),
             ])
@@ -123,6 +148,7 @@ impl DropboxAuth {
     }
 
     pub async fn refresh_token(&self) -> Result<TokenInfo, AuthError> {
+        let client_id = self.get_client_id()?;
         let current = self.load_tokens()?;
         let refresh_token = current
             .refresh_token
@@ -134,7 +160,7 @@ impl DropboxAuth {
             .form(&[
                 ("grant_type", "refresh_token"),
                 ("refresh_token", &refresh_token),
-                ("client_id", &self.client_id),
+                ("client_id", &client_id),
             ])
             .send()
             .await?;
