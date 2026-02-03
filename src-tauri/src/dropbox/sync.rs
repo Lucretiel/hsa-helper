@@ -1,6 +1,7 @@
 use super::client::{ClientError, DropboxClient, WriteMode};
 use crate::models::event::{HsaEvent, HsaMetadata};
 use std::collections::HashMap;
+use uuid::Uuid;
 
 const METADATA_PATH: &str = "/Apps/HSAHelper/metadata.json";
 const RECEIPTS_PATH: &str = "/Apps/HSAHelper/receipts";
@@ -72,16 +73,16 @@ impl DropboxSync {
 
     fn reconcile(&self, local: &HsaMetadata, remote: &HsaMetadata) -> HsaMetadata {
         // Merge events by ID, keeping the most recently updated version
-        let mut events_map: HashMap<String, HsaEvent> = HashMap::new();
+        let mut events_map: HashMap<Uuid, HsaEvent> = HashMap::new();
 
         // Add all remote events
         for event in &remote.events {
-            events_map.insert(event.id().to_string(), event.clone());
+            events_map.insert(event.id(), event.clone());
         }
 
         // Merge local events, preferring newer updates
         for event in &local.events {
-            let id = event.id().to_string();
+            let id = event.id();
             if let Some(existing) = events_map.get(&id) {
                 // Keep the one with the newer updated_at
                 let local_updated = get_updated_at(event);
@@ -105,13 +106,13 @@ impl DropboxSync {
         }
     }
 
-    pub async fn upload_receipt(&self, receipt_id: &str, data: &[u8]) -> Result<(), ClientError> {
+    pub async fn upload_receipt(&self, receipt_id: Uuid, data: &[u8]) -> Result<(), ClientError> {
         let path = format!("{}/{}.pdf", RECEIPTS_PATH, receipt_id);
         self.client.upload_file(&path, data, WriteMode::Add).await?;
         Ok(())
     }
 
-    pub async fn download_receipt(&self, receipt_id: &str) -> Result<Vec<u8>, ClientError> {
+    pub async fn download_receipt(&self, receipt_id: Uuid) -> Result<Vec<u8>, ClientError> {
         let path = format!("{}/{}.pdf", RECEIPTS_PATH, receipt_id);
         let (data, _) = self.client.download_file(&path).await?;
         Ok(data)

@@ -1,6 +1,7 @@
 use crate::commands::dropbox::DropboxState;
 use crate::models::event::{HsaEvent, NewEvent};
 use tauri::State;
+use uuid::Uuid;
 
 #[tauri::command]
 pub async fn get_events(state: State<'_, DropboxState>) -> Result<Vec<HsaEvent>, String> {
@@ -34,7 +35,7 @@ pub async fn add_event(
 }
 
 #[tauri::command]
-pub async fn delete_event(id: String, state: State<'_, DropboxState>) -> Result<(), String> {
+pub async fn delete_event(id: Uuid, state: State<'_, DropboxState>) -> Result<(), String> {
     let guard = state.sync.lock().await;
     let sync = guard.as_ref().ok_or("Not connected to Dropbox")?;
 

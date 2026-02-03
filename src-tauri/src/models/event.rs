@@ -5,12 +5,12 @@ use uuid::Uuid;
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum HsaEvent {
     Expense {
-        id: String,
+        id: Uuid,
         date: String,
         #[serde(rename = "amountCents")]
         amount_cents: i64,
         #[serde(rename = "receiptId")]
-        receipt_id: Option<String>,
+        receipt_id: Option<Uuid>,
         #[serde(rename = "createdAt")]
         created_at: String,
         #[serde(rename = "updatedAt")]
@@ -18,24 +18,24 @@ pub enum HsaEvent {
         description: String,
     },
     Withdrawal {
-        id: String,
+        id: Uuid,
         date: String,
         #[serde(rename = "amountCents")]
         amount_cents: i64,
         #[serde(rename = "receiptId")]
-        receipt_id: Option<String>,
+        receipt_id: Option<Uuid>,
         #[serde(rename = "createdAt")]
         created_at: String,
         #[serde(rename = "updatedAt")]
         updated_at: String,
     },
     Deposit {
-        id: String,
+        id: Uuid,
         date: String,
         #[serde(rename = "amountCents")]
         amount_cents: i64,
         #[serde(rename = "receiptId")]
-        receipt_id: Option<String>,
+        receipt_id: Option<Uuid>,
         #[serde(rename = "createdAt")]
         created_at: String,
         #[serde(rename = "updatedAt")]
@@ -44,11 +44,11 @@ pub enum HsaEvent {
 }
 
 impl HsaEvent {
-    pub fn id(&self) -> &str {
+    pub fn id(&self) -> Uuid {
         match self {
-            HsaEvent::Expense { id, .. } => id,
-            HsaEvent::Withdrawal { id, .. } => id,
-            HsaEvent::Deposit { id, .. } => id,
+            HsaEvent::Expense { id, .. } => *id,
+            HsaEvent::Withdrawal { id, .. } => *id,
+            HsaEvent::Deposit { id, .. } => *id,
         }
     }
 }
@@ -62,27 +62,27 @@ pub enum NewEvent {
         amount_cents: i64,
         description: String,
         #[serde(rename = "receiptId")]
-        receipt_id: Option<String>,
+        receipt_id: Option<Uuid>,
     },
     Withdrawal {
         date: String,
         #[serde(rename = "amountCents")]
         amount_cents: i64,
         #[serde(rename = "receiptId")]
-        receipt_id: Option<String>,
+        receipt_id: Option<Uuid>,
     },
     Deposit {
         date: String,
         #[serde(rename = "amountCents")]
         amount_cents: i64,
         #[serde(rename = "receiptId")]
-        receipt_id: Option<String>,
+        receipt_id: Option<Uuid>,
     },
 }
 
 impl NewEvent {
     pub fn into_event(self) -> HsaEvent {
-        let id = Uuid::new_v4().to_string();
+        let id = Uuid::new_v4();
         let now = chrono::Utc::now().to_rfc3339();
 
         match self {

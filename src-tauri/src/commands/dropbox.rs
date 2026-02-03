@@ -4,6 +4,7 @@ use crate::models::event::HsaMetadata;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 use tokio::sync::Mutex;
+use uuid::Uuid;
 
 pub struct DropboxState {
     pub sync: Arc<Mutex<Option<DropboxSync>>>,
@@ -159,27 +160,27 @@ pub async fn save_metadata(
 
 #[tauri::command]
 pub async fn upload_receipt(
-    receipt_id: String,
+    receipt_id: Uuid,
     data: Vec<u8>,
     state: State<'_, DropboxState>,
 ) -> Result<(), String> {
     let guard = state.sync.lock().await;
     let sync = guard.as_ref().ok_or("Not connected to Dropbox")?;
 
-    sync.upload_receipt(&receipt_id, &data)
+    sync.upload_receipt(receipt_id, &data)
         .await
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub async fn download_receipt(
-    receipt_id: String,
+    receipt_id: Uuid,
     state: State<'_, DropboxState>,
 ) -> Result<Vec<u8>, String> {
     let guard = state.sync.lock().await;
     let sync = guard.as_ref().ok_or("Not connected to Dropbox")?;
 
-    sync.download_receipt(&receipt_id)
+    sync.download_receipt(receipt_id)
         .await
         .map_err(|e| e.to_string())
 }
