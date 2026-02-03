@@ -24,8 +24,8 @@
           extensions = [ "rust-src" "rust-analyzer" ];
         };
 
-        # Tauri dependencies for Linux
-        tauriDeps = with pkgs; [
+        # Tauri dependencies for Linux only
+        linuxDeps = with pkgs; pkgs.lib.optionals pkgs.stdenv.isLinux [
           # Build dependencies
           pkg-config
           openssl
@@ -66,10 +66,10 @@
 
             # Beads
             beads.packages.${system}.default
-          ] ++ tauriDeps;
+          ] ++ linuxDeps;
 
           # Environment variables needed for Tauri on Linux
-          PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
+          PKG_CONFIG_PATH = pkgs.lib.optionalString pkgs.stdenv.isLinux "${pkgs.openssl.dev}/lib/pkgconfig";
 
           shellHook = ''
             echo "Rust version: $(rustc --version)"
