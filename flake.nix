@@ -24,6 +24,30 @@
           extensions = [ "rust-src" "rust-analyzer" ];
         };
 
+        # Tauri dependencies for Linux
+        tauriDeps = with pkgs; [
+          # Build dependencies
+          pkg-config
+          openssl
+
+          # Tauri runtime dependencies (Linux/GTK)
+          gtk3
+          webkitgtk_4_1
+          libsoup_3
+          glib
+          gdk-pixbuf
+          cairo
+          pango
+          atk
+          librsvg
+
+          # Additional Tauri requirements
+          gst_all_1.gstreamer
+          gst_all_1.gst-plugins-base
+          gst_all_1.gst-plugins-good
+          libappindicator-gtk3
+        ];
+
       in
       {
         devShells.default = pkgs.mkShell {
@@ -31,10 +55,7 @@
             # Rust toolchain
             rustToolchain
 
-            # Deno for TypeScript/React development
-            deno
-
-            # Node.js ecosystem (useful for npm packages and tooling)
+            # Node.js for TypeScript/React development
             nodejs_22
 
             # Git for version control
@@ -45,21 +66,21 @@
 
             # Beads
             beads.packages.${system}.default
-          ];
+          ] ++ tauriDeps;
+
+          # Environment variables needed for Tauri on Linux
+          PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
 
           shellHook = ''
-            echo "🦀 Rust version: $(rustc --version)"
-            echo "🦕 Deno version: $(deno --version | head -n1)"
-            echo "📦 Node version: $(node --version)"
+            echo "Rust version: $(rustc --version)"
+            echo "Node version: $(node --version)"
             echo ""
             echo "HSA Helper Development Environment"
             echo ""
           '';
         };
 
-        # Optional: define packages
         packages = {
-          # You can add package definitions here as your project grows
         };
       }
     );

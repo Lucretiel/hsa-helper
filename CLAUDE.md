@@ -6,7 +6,7 @@ This project should use beads for task tracking; see @AGENTS.md for details.
 
 ## Architecture
 
-The project should be a single self-contained Tauri app; it should use react + typescript for the tauri frontend. It should use a flake to manage any development toolchains it needs (Rust, Bun, etc).
+The project should be a single self-contained Tauri app; it should use react + typescript for the tauri frontend. It should use a flake to manage any development toolchains it needs (Rust, Node.js, etc). Use npm for package management (not Bun or Deno).
 
 For the storage backend, it will use the dropbox API. It should be designed in such a way as to minimize the risk of conflicts. Metadata should live in a single large JSON files, with PDFs existing separately. When updating the JSON, take care to avoid conflicts, and reconcile if necessary.
 
