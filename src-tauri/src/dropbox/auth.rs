@@ -1,22 +1,35 @@
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-use keyring::Entry;
 use rand::Rng;
 use sha2::{Digest, Sha256};
-use std::sync::Mutex;
+use std::fs;
+use std::path::PathBuf;
 use thiserror::Error;
 
-const KEYRING_SERVICE: &str = "hsa-helper";
-const KEYRING_USER: &str = "dropbox-tokens";
-const KEYRING_APP_KEY: &str = "dropbox-app-key";
+const DROPBOX_APP_KEY: &str = "8pibzyy4kg696lb";
+
+fn get_config_dir() -> Result<PathBuf, AuthError> {
+    let config_dir = dirs::config_dir()
+        .ok_or_else(|| AuthError::Storage("Could not find config directory".into()))?
+        .join("hsa-helper");
+
+    if !config_dir.exists() {
+        fs::create_dir_all(&config_dir)
+            .map_err(|e| AuthError::Storage(format!("Failed to create config dir: {}", e)))?;
+    }
+
+    Ok(config_dir)
+}
+
+fn get_tokens_path() -> Result<PathBuf, AuthError> {
+    Ok(get_config_dir()?.join("tokens.json"))
+}
 
 #[derive(Debug, Error)]
 pub enum AuthError {
     #[error("Not authenticated")]
     NotAuthenticated,
-    #[error("App key not configured")]
-    AppKeyNotConfigured,
-    #[error("Keyring error: {0}")]
-    Keyring(String),
+    #[error("Storage error: {0}")]
+    Storage(String),
     #[error("HTTP error: {0}")]
     Http(#[from] reqwest::Error),
     #[error("JSON error: {0}")]
@@ -32,79 +45,56 @@ pub struct TokenInfo {
     pub expires_at: Option<i64>,
 }
 
-pub struct DropboxAuth {
-    pending_verifier: Mutex<Option<String>>,
-}
+pub struct DropboxAuth;
 
 impl DropboxAuth {
     pub fn new() -> Self {
-        Self {
-            pending_verifier: Mutex::new(None),
-        }
+        Self
     }
 
-    pub fn get_app_key() -> Result<String, AuthError> {
-        let entry = Entry::new(KEYRING_SERVICE, KEYRING_APP_KEY)
-            .map_err(|e| AuthError::Keyring(e.to_string()))?;
-
-        entry
-            .get_password()
-            .map_err(|_| AuthError::AppKeyNotConfigured)
+    pub fn get_app_key() -> String {
+        DROPBOX_APP_KEY.to_string()
     }
 
-    pub fn set_app_key(app_key: &str) -> Result<(), AuthError> {
-        let entry = Entry::new(KEYRING_SERVICE, KEYRING_APP_KEY)
-            .map_err(|e| AuthError::Keyring(e.to_string()))?;
-
-        entry
-            .set_password(app_key)
-            .map_err(|e| AuthError::Keyring(e.to_string()))?;
-
-        Ok(())
-    }
-
-    pub fn has_app_key() -> bool {
-        Self::get_app_key().is_ok()
-    }
-
-    fn get_client_id(&self) -> Result<String, AuthError> {
+    fn get_client_id(&self) -> String {
         Self::get_app_key()
     }
 
-    pub fn generate_auth_url(&self, redirect_uri: &str) -> Result<String, AuthError> {
-        let client_id = self.get_client_id()?;
+    /// Generate an OAuth authorization URL and return it along with the PKCE verifier.
+    /// The verifier must be passed to `exchange_code` later.
+    pub fn generate_auth_url_with_verifier(&self, redirect_uri: &str) -> (String, String) {
+        let client_id = self.get_client_id();
         let code_verifier = generate_code_verifier();
         let code_challenge = generate_code_challenge(&code_verifier);
 
-        // Store verifier for later token exchange
-        *self.pending_verifier.lock().unwrap() = Some(code_verifier);
+        // Request scopes needed for file operations
+        let scopes = "files.content.write files.content.read files.metadata.write files.metadata.read";
 
-        Ok(format!(
+        let url = format!(
             "https://www.dropbox.com/oauth2/authorize?\
             client_id={}&\
             response_type=code&\
             code_challenge={}&\
             code_challenge_method=S256&\
             redirect_uri={}&\
-            token_access_type=offline",
+            token_access_type=offline&\
+            scope={}",
             client_id,
             code_challenge,
-            urlencoding::encode(redirect_uri)
-        ))
+            urlencoding::encode(redirect_uri),
+            urlencoding::encode(scopes)
+        );
+
+        (url, code_verifier)
     }
 
     pub async fn exchange_code(
         &self,
         code: &str,
         redirect_uri: &str,
+        verifier: &str,
     ) -> Result<TokenInfo, AuthError> {
-        let client_id = self.get_client_id()?;
-        let verifier = self
-            .pending_verifier
-            .lock()
-            .unwrap()
-            .take()
-            .ok_or(AuthError::NotAuthenticated)?;
+        let client_id = self.get_client_id();
 
         let client = reqwest::Client::new();
         let response = client
@@ -113,7 +103,7 @@ impl DropboxAuth {
                 ("code", code),
                 ("grant_type", "authorization_code"),
                 ("client_id", &client_id),
-                ("code_verifier", &verifier),
+                ("code_verifier", verifier),
                 ("redirect_uri", redirect_uri),
             ])
             .send()
@@ -148,7 +138,7 @@ impl DropboxAuth {
     }
 
     pub async fn refresh_token(&self) -> Result<TokenInfo, AuthError> {
-        let client_id = self.get_client_id()?;
+        let client_id = self.get_client_id();
         let current = self.load_tokens()?;
         let refresh_token = current
             .refresh_token
@@ -197,36 +187,34 @@ impl DropboxAuth {
     }
 
     pub fn load_tokens(&self) -> Result<TokenInfo, AuthError> {
-        let entry = Entry::new(KEYRING_SERVICE, KEYRING_USER)
-            .map_err(|e| AuthError::Keyring(e.to_string()))?;
-
-        let secret = entry
-            .get_password()
+        let path = get_tokens_path()?;
+        let contents = fs::read_to_string(&path)
             .map_err(|_| AuthError::NotAuthenticated)?;
-
-        serde_json::from_str(&secret).map_err(AuthError::Json)
+        serde_json::from_str(&contents).map_err(AuthError::Json)
     }
 
     pub fn save_tokens(&self, tokens: &TokenInfo) -> Result<(), AuthError> {
-        let entry = Entry::new(KEYRING_SERVICE, KEYRING_USER)
-            .map_err(|e| AuthError::Keyring(e.to_string()))?;
+        let path = get_tokens_path()?;
+        let json = serde_json::to_string_pretty(tokens)?;
+        fs::write(&path, &json)
+            .map_err(|e| AuthError::Storage(format!("Failed to save tokens: {}", e)))?;
 
-        let json = serde_json::to_string(tokens)?;
-        entry
-            .set_password(&json)
-            .map_err(|e| AuthError::Keyring(e.to_string()))?;
+        // Verify the tokens were actually saved
+        let verify = fs::read_to_string(&path)
+            .map_err(|e| AuthError::Storage(format!("Token verification read failed: {}", e)))?;
+        if verify != json {
+            return Err(AuthError::Storage("Token verification failed: stored data doesn't match".into()));
+        }
 
         Ok(())
     }
 
     pub fn clear_tokens(&self) -> Result<(), AuthError> {
-        let entry = Entry::new(KEYRING_SERVICE, KEYRING_USER)
-            .map_err(|e| AuthError::Keyring(e.to_string()))?;
-
-        entry
-            .delete_credential()
-            .map_err(|e| AuthError::Keyring(e.to_string()))?;
-
+        let path = get_tokens_path()?;
+        if path.exists() {
+            fs::remove_file(&path)
+                .map_err(|e| AuthError::Storage(format!("Failed to clear tokens: {}", e)))?;
+        }
         Ok(())
     }
 

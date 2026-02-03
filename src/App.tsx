@@ -44,19 +44,19 @@ function App() {
     );
   }
 
-  return (
-    <Layout events={events}>
-      <div className="app-content">
-        <div className="toolbar">
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => setShowForm(!showForm)}
-          >
-            {showForm ? "Cancel" : "Add Event"}
-          </button>
-        </div>
+  const addEventButton = (
+    <button
+      type="button"
+      className="btn btn-primary"
+      onClick={() => setShowForm(!showForm)}
+    >
+      {showForm ? "Cancel" : "Add Event"}
+    </button>
+  );
 
+  return (
+    <Layout events={events} headerAction={addEventButton}>
+      <div className="app-content">
         {showForm && (
           <EventForm
             onSubmit={async (event) => {
@@ -67,12 +67,19 @@ function App() {
           />
         )}
 
-        <FilterBar filters={filters} onFiltersChange={setFilters} />
+        {events.length > 0 && (
+          <FilterBar filters={filters} onFiltersChange={setFilters} />
+        )}
 
         {isLoading ? (
           <div className="loading">Loading events...</div>
         ) : (
-          <EventList events={filteredEvents} onViewReceipt={setViewingReceiptId} />
+          <EventList
+            events={filteredEvents}
+            filters={filters}
+            hasAnyEvents={events.length > 0}
+            onViewReceipt={setViewingReceiptId}
+          />
         )}
       </div>
 

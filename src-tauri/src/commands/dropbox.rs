@@ -2,7 +2,7 @@ use crate::dropbox::{DropboxAuth, DropboxClient};
 use crate::dropbox::sync::DropboxSync;
 use crate::models::event::HsaMetadata;
 use std::sync::Arc;
-use tauri::State;
+use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 use tokio::sync::Mutex;
 
 pub struct DropboxState {
@@ -35,41 +35,104 @@ impl DropboxState {
 }
 
 #[tauri::command]
-pub fn has_app_key() -> bool {
-    DropboxAuth::has_app_key()
-}
+pub async fn start_oauth_flow(
+    app: AppHandle,
+    state: State<'_, DropboxState>,
+) -> Result<(), String> {
+    use std::sync::atomic::{AtomicBool, Ordering};
 
-#[tauri::command]
-pub fn set_app_key(app_key: String) -> Result<(), String> {
-    DropboxAuth::set_app_key(&app_key).map_err(|e| e.to_string())
-}
+    const REDIRECT_URI: &str = "http://localhost:1420/oauth/callback";
 
-#[tauri::command]
-pub fn get_auth_url(redirect_uri: String, state: State<DropboxState>) -> Result<String, String> {
-    state.auth().generate_auth_url(&redirect_uri).map_err(|e| e.to_string())
+    let (auth_url, verifier) = state.auth().generate_auth_url_with_verifier(REDIRECT_URI);
+
+    // Track whether auth completed successfully
+    let auth_completed = Arc::new(AtomicBool::new(false));
+    let auth_completed_nav = auth_completed.clone();
+
+    // Clone what we need for the navigation handler closure
+    let app_handle = app.clone();
+    let sync_state = state.sync.clone();
+
+    let oauth_window = WebviewWindowBuilder::new(
+        &app,
+        "oauth",
+        WebviewUrl::External(auth_url.parse().map_err(|e: url::ParseError| e.to_string())?),
+    )
+    .title("Connect to Dropbox")
+    .inner_size(500.0, 700.0)
+    .center()
+    .on_navigation(move |url: &url::Url| {
+        if url.as_str().starts_with(REDIRECT_URI) {
+            // Extract the authorization code from the URL
+            if let Some(code) = url
+                .query_pairs()
+                .find(|(k, _)| k == "code")
+                .map(|(_, v)| v.to_string())
+            {
+                let app = app_handle.clone();
+                let sync_state = sync_state.clone();
+                let auth_completed = auth_completed_nav.clone();
+                let verifier = verifier.clone();
+
+                tauri::async_runtime::spawn(async move {
+                    let auth = DropboxAuth::new();
+                    let result: Result<(), String> = async {
+                        auth.exchange_code(&code, REDIRECT_URI, &verifier)
+                            .await
+                            .map_err(|e| e.to_string())?;
+
+                        // Initialize the sync client
+                        let client = DropboxClient::new(DropboxAuth::new());
+                        let sync = DropboxSync::new(client);
+                        sync.ensure_folders()
+                            .await
+                            .map_err(|e| format!("Failed to initialize Dropbox folders: {}", e))?;
+
+                        *sync_state.lock().await = Some(sync);
+                        Ok(())
+                    }
+                    .await;
+
+                    match result {
+                        Ok(()) => {
+                            auth_completed.store(true, Ordering::SeqCst);
+                            let _ = app.emit("oauth-success", ());
+                        }
+                        Err(e) => {
+                            let _ = app.emit("oauth-error", e);
+                        }
+                    }
+
+                    // Close the OAuth window
+                    if let Some(window) = app.get_webview_window("oauth") {
+                        let _ = window.close();
+                    }
+                });
+
+                return false; // Don't navigate to the callback URL
+            }
+        }
+        true // Allow other navigations
+    })
+    .build()
+    .map_err(|e| e.to_string())?;
+
+    // Listen for window close to detect cancellation
+    let app_for_close = app.clone();
+    oauth_window.on_window_event(move |event| {
+        if let tauri::WindowEvent::Destroyed = event {
+            if !auth_completed.load(Ordering::SeqCst) {
+                let _ = app_for_close.emit("oauth-cancelled", ());
+            }
+        }
+    });
+
+    Ok(())
 }
 
 #[tauri::command]
 pub fn is_authenticated(state: State<DropboxState>) -> bool {
     state.auth().is_authenticated()
-}
-
-#[tauri::command]
-pub async fn exchange_auth_code(
-    code: String,
-    redirect_uri: String,
-    state: State<'_, DropboxState>,
-) -> Result<(), String> {
-    state
-        .auth()
-        .exchange_code(&code, &redirect_uri)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    // Initialize the sync client
-    state.initialize().await?;
-
-    Ok(())
 }
 
 #[tauri::command]

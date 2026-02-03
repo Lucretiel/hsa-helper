@@ -4,27 +4,22 @@ mod models;
 
 use tauri::Manager;
 use commands::dropbox::{
-    download_receipt, exchange_auth_code, get_auth_url, has_app_key, is_authenticated,
-    logout, save_metadata, set_app_key, sync_metadata, upload_receipt, DropboxState,
+    download_receipt, is_authenticated, logout, save_metadata, start_oauth_flow,
+    sync_metadata, upload_receipt, DropboxState,
 };
 use commands::events::{add_event, delete_event, get_events};
-use models::event::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .manage(AppState::new())
         .manage(DropboxState::new())
         .invoke_handler(tauri::generate_handler![
             get_events,
             add_event,
             delete_event,
-            has_app_key,
-            set_app_key,
-            get_auth_url,
             is_authenticated,
-            exchange_auth_code,
+            start_oauth_flow,
             logout,
             sync_metadata,
             save_metadata,

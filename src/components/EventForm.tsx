@@ -2,6 +2,38 @@ import { useState, useRef } from "react";
 import type { EventType, NewEvent } from "../services/types";
 import { uploadReceipt } from "../services/tauri";
 
+/**
+ * Parse a dollar amount string to cents.
+ * Accepts digit separators: comma, underscore, space.
+ * Returns null if the string is not a valid dollar amount.
+ */
+function parseDollarsToCents(input: string): number | null {
+  // Remove allowed digit separators
+  const cleaned = input.replace(/[,_ ]/g, "");
+
+  // Must match: optional digits, optional decimal with 1-2 digits
+  // Valid: "5", "5.3", "5.30", ".50", "1234.56"
+  // Invalid: "", ".", "5.", "5.123", "abc", "5.3.2"
+  const match = cleaned.match(/^(\d*)(?:\.(\d{1,2}))?$/);
+  if (!match) {
+    return null;
+  }
+
+  const [, dollarsPart, centsPart] = match;
+
+  // Must have at least dollars or cents
+  if (!dollarsPart && !centsPart) {
+    return null;
+  }
+
+  const dollars = dollarsPart ? parseInt(dollarsPart, 10) : 0;
+  // Pad cents to 2 digits: "5" -> "50", "05" -> "05"
+  const centsStr = (centsPart ?? "").padEnd(2, "0");
+  const cents = parseInt(centsStr, 10);
+
+  return dollars * 100 + cents;
+}
+
 interface EventFormProps {
   onSubmit: (event: NewEvent) => Promise<void>;
   onCancel: () => void;
@@ -33,9 +65,9 @@ export function EventForm({ onSubmit, onCancel }: EventFormProps) {
     e.preventDefault();
     setError(null);
 
-    const amountCents = Math.round(Number.parseFloat(amount) * 100);
-    if (Number.isNaN(amountCents) || amountCents <= 0) {
-      setError("Please enter a valid amount");
+    const amountCents = parseDollarsToCents(amount);
+    if (amountCents === null || amountCents <= 0) {
+      setError("Please enter a valid amount (e.g., 12.50)");
       return;
     }
 
@@ -71,16 +103,30 @@ export function EventForm({ onSubmit, onCancel }: EventFormProps) {
 
       <div className="form-row">
         <div className="form-group">
-          <label htmlFor="event-type">Type</label>
-          <select
-            id="event-type"
-            value={type}
-            onChange={(e) => setType(e.target.value as EventType)}
-          >
-            <option value="expense">Expense</option>
-            <option value="withdrawal">Withdrawal</option>
-            <option value="deposit">Deposit</option>
-          </select>
+          <label>Type</label>
+          <div className="type-buttons">
+            <button
+              type="button"
+              className={`type-btn ${type === "expense" ? "active" : ""}`}
+              onClick={() => setType("expense")}
+            >
+              Expense
+            </button>
+            <button
+              type="button"
+              className={`type-btn ${type === "withdrawal" ? "active" : ""}`}
+              onClick={() => setType("withdrawal")}
+            >
+              Withdrawal
+            </button>
+            <button
+              type="button"
+              className={`type-btn ${type === "deposit" ? "active" : ""}`}
+              onClick={() => setType("deposit")}
+            >
+              Deposit
+            </button>
+          </div>
         </div>
 
         <div className="form-group">

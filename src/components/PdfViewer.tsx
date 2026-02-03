@@ -20,7 +20,7 @@ export function PdfViewer({ receiptId, onClose }: PdfViewerProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
-  const [scale, setScale] = useState(1.5);
+  const [scale, setScale] = useState(1.0);
 
   const renderPage = useCallback(
     async (pageNum: number) => {

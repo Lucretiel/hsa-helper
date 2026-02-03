@@ -21,12 +21,13 @@ uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 tokio = { version = "1", features = ["sync", "rt-multi-thread"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
-keyring = { version = "3", features = ["sync-secret-service"] }
 rand = "0.9"
 base64 = "0.22"
 sha2 = "0.10"
 url = "2"
 thiserror = "2"
+
+dirs = "6"
 
 [profile.release]
 panic = "abort"

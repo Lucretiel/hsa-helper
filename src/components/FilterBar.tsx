@@ -19,6 +19,26 @@ export function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
     onFiltersChange({ ...filters, eventTypes: types });
   };
 
+  const handleStartDateChange = (value: string) => {
+    const newStart = value || null;
+    // If new start date is after end date, clear end date
+    if (newStart && filters.endDate && newStart > filters.endDate) {
+      onFiltersChange({ ...filters, startDate: newStart, endDate: null });
+    } else {
+      onFiltersChange({ ...filters, startDate: newStart });
+    }
+  };
+
+  const handleEndDateChange = (value: string) => {
+    const newEnd = value || null;
+    // If new end date is before start date, clear start date
+    if (newEnd && filters.startDate && newEnd < filters.startDate) {
+      onFiltersChange({ ...filters, startDate: null, endDate: newEnd });
+    } else {
+      onFiltersChange({ ...filters, endDate: newEnd });
+    }
+  };
+
   return (
     <div className="filter-bar">
       <div className="filter-group">
@@ -39,32 +59,48 @@ export function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
 
       <div className="filter-group">
         <label htmlFor="filter-start">From</label>
-        <input
-          id="filter-start"
-          type="date"
-          value={filters.startDate ?? ""}
-          onChange={(e) =>
-            onFiltersChange({
-              ...filters,
-              startDate: e.target.value || null,
-            })
-          }
-        />
+        <div className="date-filter-input">
+          <input
+            id="filter-start"
+            type="date"
+            value={filters.startDate ?? ""}
+            max={filters.endDate ?? undefined}
+            onChange={(e) => handleStartDateChange(e.target.value)}
+          />
+          {filters.startDate && (
+            <button
+              type="button"
+              className="btn-clear"
+              onClick={() => onFiltersChange({ ...filters, startDate: null })}
+              title="Clear start date"
+            >
+              ×
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="filter-group">
         <label htmlFor="filter-end">To</label>
-        <input
-          id="filter-end"
-          type="date"
-          value={filters.endDate ?? ""}
-          onChange={(e) =>
-            onFiltersChange({
-              ...filters,
-              endDate: e.target.value || null,
-            })
-          }
-        />
+        <div className="date-filter-input">
+          <input
+            id="filter-end"
+            type="date"
+            value={filters.endDate ?? ""}
+            min={filters.startDate ?? undefined}
+            onChange={(e) => handleEndDateChange(e.target.value)}
+          />
+          {filters.endDate && (
+            <button
+              type="button"
+              className="btn-clear"
+              onClick={() => onFiltersChange({ ...filters, endDate: null })}
+              title="Clear end date"
+            >
+              ×
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
