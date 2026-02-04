@@ -1,6 +1,7 @@
 use super::client::{ClientError, DropboxClient, WriteMode};
 use crate::models::event::{HsaEvent, HsaMetadata};
 use crate::models::Rev;
+use jiff::Timestamp;
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -52,7 +53,7 @@ impl DropboxSync {
         match self.client.upload_file(METADATA_PATH, &data, mode).await {
             Ok(file_meta) => {
                 let mut updated = metadata.clone();
-                updated.last_modified = jiff::Timestamp::now().to_string();
+                updated.last_modified = Timestamp::now();
                 Ok((updated, file_meta.rev))
             }
             Err(ClientError::Conflict(_)) => {
@@ -86,9 +87,7 @@ impl DropboxSync {
             let id = event.id();
             if let Some(existing) = events_map.get(&id) {
                 // Keep the one with the newer updated_at
-                let local_updated = get_updated_at(event);
-                let remote_updated = get_updated_at(existing);
-                if local_updated > remote_updated {
+                if event.updated_at() > existing.updated_at() {
                     events_map.insert(id, event.clone());
                 }
             } else {
@@ -97,11 +96,11 @@ impl DropboxSync {
         }
 
         let mut events: Vec<HsaEvent> = events_map.into_values().collect();
-        events.sort_by(|a, b| get_date(a).cmp(get_date(b)));
+        events.sort_by_key(|e| e.date());
 
         HsaMetadata {
             version: local.version.max(remote.version),
-            last_modified: jiff::Timestamp::now().to_string(),
+            last_modified: Timestamp::now(),
             events,
         }
     }
@@ -116,21 +115,5 @@ impl DropboxSync {
         let path = format!("{}/{}.pdf", RECEIPTS_PATH, receipt_id);
         let (data, _) = self.client.download_file(&path).await?;
         Ok(data)
-    }
-}
-
-fn get_updated_at(event: &HsaEvent) -> &str {
-    match event {
-        HsaEvent::Expense { updated_at, .. } => updated_at,
-        HsaEvent::Withdrawal { updated_at, .. } => updated_at,
-        HsaEvent::Deposit { updated_at, .. } => updated_at,
-    }
-}
-
-fn get_date(event: &HsaEvent) -> &str {
-    match event {
-        HsaEvent::Expense { date, .. } => date,
-        HsaEvent::Withdrawal { date, .. } => date,
-        HsaEvent::Deposit { date, .. } => date,
     }
 }

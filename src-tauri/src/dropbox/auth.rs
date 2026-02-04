@@ -42,7 +42,7 @@ pub enum AuthError {
 pub struct TokenInfo {
     pub access_token: String,
     pub refresh_token: Option<String>,
-    pub expires_at: Option<i64>,
+    pub expires_at: Option<jiff::Timestamp>,
 }
 
 /// Response from Dropbox OAuth2 token endpoint
@@ -123,10 +123,9 @@ impl DropboxAuth {
         }
 
         let token_response: TokenResponse = response.json().await?;
-        let expires_at =
-            token_response
-                .expires_in
-                .map(|secs| jiff::Timestamp::now().as_second() + secs);
+        let expires_at = token_response
+            .expires_in
+            .map(|secs| jiff::Timestamp::now() + jiff::Span::new().seconds(secs));
 
         let token_info = TokenInfo {
             access_token: token_response.access_token,
@@ -161,10 +160,9 @@ impl DropboxAuth {
         }
 
         let token_response: TokenResponse = response.json().await?;
-        let expires_at =
-            token_response
-                .expires_in
-                .map(|secs| jiff::Timestamp::now().as_second() + secs);
+        let expires_at = token_response
+            .expires_in
+            .map(|secs| jiff::Timestamp::now() + jiff::Span::new().seconds(secs));
 
         let token_info = TokenInfo {
             access_token: token_response.access_token,
@@ -219,8 +217,8 @@ impl DropboxAuth {
 
         // Check if token is expired (with 5 minute buffer)
         if let Some(expires_at) = tokens.expires_at {
-            let now = jiff::Timestamp::now().as_second();
-            if now >= expires_at - 300 {
+            let buffer = jiff::Span::new().minutes(5);
+            if jiff::Timestamp::now() >= expires_at - buffer {
                 // Refresh if expiring within 5 minutes
                 let refreshed = self.refresh_token().await?;
                 return Ok(refreshed.access_token);
