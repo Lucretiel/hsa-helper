@@ -9,7 +9,7 @@ use uuid::Uuid;
 const METADATA_PATH: &str = "/metadata.json";
 const RECEIPTS_PATH: &str = "/receipts";
 
-// Legacy paths for migration
+// Legacy paths (incorrectly nested within app folder)
 const LEGACY_METADATA_PATH: &str = "/Apps/HSAHelper/metadata.json";
 const LEGACY_RECEIPTS_PATH: &str = "/Apps/HSAHelper/receipts";
 
@@ -27,10 +27,9 @@ impl DropboxSync {
         Ok(())
     }
 
-    /// Migrate data from legacy /Apps/HSAHelper/ paths to root paths.
-    /// This is idempotent - safe to call multiple times.
+    /// Migrate data from legacy nested /Apps/HSAHelper/ paths to root paths.
     pub async fn migrate_legacy_paths(&self) {
-        // Migrate metadata file if it exists at legacy path
+        // Migrate metadata file
         if let Err(e) = self
             .client
             .move_file(LEGACY_METADATA_PATH, METADATA_PATH)
@@ -41,7 +40,7 @@ impl DropboxSync {
             }
         }
 
-        // Migrate receipts folder if it exists at legacy path
+        // Migrate receipts folder
         if let Err(e) = self
             .client
             .move_file(LEGACY_RECEIPTS_PATH, RECEIPTS_PATH)
