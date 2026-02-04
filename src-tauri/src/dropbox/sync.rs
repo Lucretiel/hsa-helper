@@ -1,5 +1,6 @@
 use super::client::{ClientError, DropboxClient, WriteMode};
 use crate::models::event::{HsaEvent, HsaMetadata};
+use crate::models::Rev;
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -22,50 +23,50 @@ impl DropboxSync {
         Ok(())
     }
 
-    pub async fn fetch_metadata(&self) -> Result<HsaMetadata, ClientError> {
+    pub async fn fetch_metadata(&self) -> Result<(HsaMetadata, Option<Rev>), ClientError> {
         match self.client.download_file(METADATA_PATH).await {
             Ok((bytes, file_meta)) => {
-                let mut metadata: HsaMetadata = serde_json::from_slice(&bytes)?;
-                metadata.sync_token = Some(file_meta.rev);
-                Ok(metadata)
+                let metadata: HsaMetadata = serde_json::from_slice(&bytes)?;
+                Ok((metadata, Some(file_meta.rev)))
             }
             Err(ClientError::NotFound) => {
                 // No metadata file yet, return empty
-                Ok(HsaMetadata::default())
+                Ok((HsaMetadata::default(), None))
             }
             Err(e) => Err(e),
         }
     }
 
-    pub async fn save_metadata(&self, metadata: &HsaMetadata) -> Result<HsaMetadata, ClientError> {
+    pub async fn save_metadata(
+        &self,
+        metadata: &HsaMetadata,
+        rev: Option<Rev>,
+    ) -> Result<(HsaMetadata, Rev), ClientError> {
         let data = serde_json::to_vec_pretty(metadata)?;
 
-        let mode = match &metadata.sync_token {
-            Some(rev) => WriteMode::Update(rev.clone()),
+        let mode = match rev {
+            Some(r) => WriteMode::Update(r),
             None => WriteMode::Add,
         };
 
         match self.client.upload_file(METADATA_PATH, &data, mode).await {
             Ok(file_meta) => {
                 let mut updated = metadata.clone();
-                updated.sync_token = Some(file_meta.rev);
-                updated.last_modified = chrono::Utc::now().to_rfc3339();
-                Ok(updated)
+                updated.last_modified = jiff::Timestamp::now().to_string();
+                Ok((updated, file_meta.rev))
             }
             Err(ClientError::Conflict(_)) => {
                 // Conflict! Need to reconcile
-                let remote = self.fetch_metadata().await?;
+                let (remote, remote_rev) = self.fetch_metadata().await?;
                 let reconciled = self.reconcile(metadata, &remote);
                 // Try again with the reconciled data and new rev
                 let data = serde_json::to_vec_pretty(&reconciled)?;
-                let mode = match &remote.sync_token {
-                    Some(rev) => WriteMode::Update(rev.clone()),
+                let mode = match remote_rev {
+                    Some(r) => WriteMode::Update(r),
                     None => WriteMode::Overwrite,
                 };
                 let file_meta = self.client.upload_file(METADATA_PATH, &data, mode).await?;
-                let mut updated = reconciled;
-                updated.sync_token = Some(file_meta.rev);
-                Ok(updated)
+                Ok((reconciled, file_meta.rev))
             }
             Err(e) => Err(e),
         }
@@ -100,8 +101,7 @@ impl DropboxSync {
 
         HsaMetadata {
             version: local.version.max(remote.version),
-            last_modified: chrono::Utc::now().to_rfc3339(),
-            sync_token: remote.sync_token.clone(),
+            last_modified: jiff::Timestamp::now().to_string(),
             events,
         }
     }

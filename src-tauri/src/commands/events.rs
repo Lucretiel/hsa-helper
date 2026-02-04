@@ -7,7 +7,7 @@ use uuid::Uuid;
 pub async fn get_events(state: State<'_, DropboxState>) -> Result<Vec<HsaEvent>, String> {
     let guard = state.sync.lock().await;
     let sync = guard.as_ref().ok_or("Not connected to Dropbox")?;
-    let metadata = sync.fetch_metadata().await.map_err(|e| e.to_string())?;
+    let (metadata, _rev) = sync.fetch_metadata().await.map_err(|e| e.to_string())?;
     Ok(metadata.events)
 }
 
@@ -20,14 +20,14 @@ pub async fn add_event(
     let sync = guard.as_ref().ok_or("Not connected to Dropbox")?;
 
     // Fetch current metadata
-    let mut metadata = sync.fetch_metadata().await.map_err(|e| e.to_string())?;
+    let (mut metadata, rev) = sync.fetch_metadata().await.map_err(|e| e.to_string())?;
 
     // Add the new event
     let new_event = event.into_event();
     metadata.events.push(new_event.clone());
 
     // Save back to Dropbox
-    sync.save_metadata(&metadata)
+    sync.save_metadata(&metadata, rev)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -40,7 +40,7 @@ pub async fn delete_event(id: Uuid, state: State<'_, DropboxState>) -> Result<()
     let sync = guard.as_ref().ok_or("Not connected to Dropbox")?;
 
     // Fetch current metadata
-    let mut metadata = sync.fetch_metadata().await.map_err(|e| e.to_string())?;
+    let (mut metadata, rev) = sync.fetch_metadata().await.map_err(|e| e.to_string())?;
 
     let initial_len = metadata.events.len();
     metadata.events.retain(|e| e.id() != id);
@@ -50,7 +50,7 @@ pub async fn delete_event(id: Uuid, state: State<'_, DropboxState>) -> Result<()
     }
 
     // Save back to Dropbox
-    sync.save_metadata(&metadata)
+    sync.save_metadata(&metadata, rev)
         .await
         .map_err(|e| e.to_string())?;
 

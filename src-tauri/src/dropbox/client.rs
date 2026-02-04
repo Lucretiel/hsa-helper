@@ -1,4 +1,5 @@
 use super::auth::{AuthError, DropboxAuth};
+use crate::models::Rev;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -25,7 +26,7 @@ pub enum ClientError {
 pub struct FileMetadata {
     pub name: String,
     pub path_display: String,
-    pub rev: String,
+    pub rev: Rev,
     pub size: u64,
 }
 
@@ -96,7 +97,7 @@ impl DropboxClient {
         let mode_json = match mode {
             WriteMode::Add => serde_json::json!({ ".tag": "add" }),
             WriteMode::Overwrite => serde_json::json!({ ".tag": "overwrite" }),
-            WriteMode::Update(rev) => serde_json::json!({ ".tag": "update", "update": rev }),
+            WriteMode::Update(rev) => serde_json::json!({ ".tag": "update", "update": rev.0 }),
         };
 
         let arg = serde_json::json!({
@@ -167,5 +168,5 @@ impl DropboxClient {
 pub enum WriteMode {
     Add,
     Overwrite,
-    Update(String), // rev
+    Update(Rev),
 }

@@ -83,7 +83,7 @@ pub enum NewEvent {
 impl NewEvent {
     pub fn into_event(self) -> HsaEvent {
         let id = Uuid::new_v4();
-        let now = chrono::Utc::now().to_rfc3339();
+        let now = jiff::Timestamp::now().to_string();
 
         match self {
             NewEvent::Expense {
@@ -133,8 +133,6 @@ pub struct HsaMetadata {
     pub version: u32,
     #[serde(rename = "lastModified")]
     pub last_modified: String,
-    #[serde(rename = "syncToken")]
-    pub sync_token: Option<String>,
     pub events: Vec<HsaEvent>,
 }
 
@@ -142,8 +140,7 @@ impl Default for HsaMetadata {
     fn default() -> Self {
         Self {
             version: 1,
-            last_modified: chrono::Utc::now().to_rfc3339(),
-            sync_token: None,
+            last_modified: jiff::Timestamp::now().to_string(),
             events: Vec::new(),
         }
     }

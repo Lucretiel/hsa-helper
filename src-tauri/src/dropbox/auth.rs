@@ -45,6 +45,14 @@ pub struct TokenInfo {
     pub expires_at: Option<i64>,
 }
 
+/// Response from Dropbox OAuth2 token endpoint
+#[derive(Debug, serde::Deserialize)]
+struct TokenResponse {
+    access_token: String,
+    refresh_token: Option<String>,
+    expires_in: Option<i64>,
+}
+
 pub struct DropboxAuth;
 
 impl DropboxAuth {
@@ -62,7 +70,7 @@ impl DropboxAuth {
 
     /// Generate an OAuth authorization URL and return it along with the PKCE verifier.
     /// The verifier must be passed to `exchange_code` later.
-    pub fn generate_auth_url_with_verifier(&self, redirect_uri: &str) -> (String, String) {
+    pub fn generate_auth_url_with_verifier(&self, redirect_uri: &str) -> (url::Url, String) {
         let client_id = self.get_client_id();
         let code_verifier = generate_code_verifier();
         let code_challenge = generate_code_challenge(&code_verifier);
@@ -71,20 +79,19 @@ impl DropboxAuth {
         let scopes =
             "files.content.write files.content.read files.metadata.write files.metadata.read";
 
-        let url = format!(
-            "https://www.dropbox.com/oauth2/authorize?\
-            client_id={}&\
-            response_type=code&\
-            code_challenge={}&\
-            code_challenge_method=S256&\
-            redirect_uri={}&\
-            token_access_type=offline&\
-            scope={}",
-            client_id,
-            code_challenge,
-            urlencoding::encode(redirect_uri),
-            urlencoding::encode(scopes)
-        );
+        let url = url::Url::parse_with_params(
+            "https://www.dropbox.com/oauth2/authorize",
+            &[
+                ("client_id", client_id.as_str()),
+                ("response_type", "code"),
+                ("code_challenge", code_challenge.as_str()),
+                ("code_challenge_method", "S256"),
+                ("redirect_uri", redirect_uri),
+                ("token_access_type", "offline"),
+                ("scope", scopes),
+            ],
+        )
+        .unwrap();
 
         (url, code_verifier)
     }
@@ -115,21 +122,15 @@ impl DropboxAuth {
             return Err(AuthError::TokenExchange(error_text));
         }
 
-        let token_response: serde_json::Value = response.json().await?;
-
-        let access_token = token_response["access_token"]
-            .as_str()
-            .ok_or_else(|| AuthError::TokenExchange("Missing access_token".into()))?
-            .to_string();
-
-        let refresh_token = token_response["refresh_token"].as_str().map(String::from);
-
-        let expires_in = token_response["expires_in"].as_i64();
-        let expires_at = expires_in.map(|secs| chrono::Utc::now().timestamp() + secs);
+        let token_response: TokenResponse = response.json().await?;
+        let expires_at =
+            token_response
+                .expires_in
+                .map(|secs| jiff::Timestamp::now().as_second() + secs);
 
         let token_info = TokenInfo {
-            access_token,
-            refresh_token,
+            access_token: token_response.access_token,
+            refresh_token: token_response.refresh_token,
             expires_at,
         };
 
@@ -159,24 +160,15 @@ impl DropboxAuth {
             return Err(AuthError::TokenExchange(error_text));
         }
 
-        let token_response: serde_json::Value = response.json().await?;
-
-        let access_token = token_response["access_token"]
-            .as_str()
-            .ok_or_else(|| AuthError::TokenExchange("Missing access_token".into()))?
-            .to_string();
-
-        let new_refresh = token_response["refresh_token"]
-            .as_str()
-            .map(String::from)
-            .or(Some(refresh_token));
-
-        let expires_in = token_response["expires_in"].as_i64();
-        let expires_at = expires_in.map(|secs| chrono::Utc::now().timestamp() + secs);
+        let token_response: TokenResponse = response.json().await?;
+        let expires_at =
+            token_response
+                .expires_in
+                .map(|secs| jiff::Timestamp::now().as_second() + secs);
 
         let token_info = TokenInfo {
-            access_token,
-            refresh_token: new_refresh,
+            access_token: token_response.access_token,
+            refresh_token: token_response.refresh_token.or(Some(refresh_token)),
             expires_at,
         };
 
@@ -227,7 +219,7 @@ impl DropboxAuth {
 
         // Check if token is expired (with 5 minute buffer)
         if let Some(expires_at) = tokens.expires_at {
-            let now = chrono::Utc::now().timestamp();
+            let now = jiff::Timestamp::now().as_second();
             if now >= expires_at - 300 {
                 // Refresh if expiring within 5 minutes
                 let refreshed = self.refresh_token().await?;
@@ -250,10 +242,4 @@ fn generate_code_challenge(verifier: &str) -> String {
     hasher.update(verifier.as_bytes());
     let hash = hasher.finalize();
     URL_SAFE_NO_PAD.encode(hash)
-}
-
-mod urlencoding {
-    pub fn encode(s: &str) -> String {
-        url::form_urlencoded::byte_serialize(s.as_bytes()).collect()
-    }
 }

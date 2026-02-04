@@ -47,11 +47,7 @@ pub async fn start_oauth_flow(
     let oauth_window = WebviewWindowBuilder::new(
         &app,
         "oauth",
-        WebviewUrl::External(
-            auth_url
-                .parse()
-                .map_err(|e: url::ParseError| e.to_string())?,
-        ),
+        WebviewUrl::External(auth_url),
     )
     .title("Connect to Dropbox")
     .inner_size(500.0, 700.0)
@@ -142,7 +138,8 @@ pub async fn sync_metadata(state: State<'_, DropboxState>) -> Result<HsaMetadata
     let guard = state.sync.lock().await;
     let sync = guard.as_ref().ok_or("Not connected to Dropbox")?;
 
-    sync.fetch_metadata().await.map_err(|e| e.to_string())
+    let (metadata, _rev) = sync.fetch_metadata().await.map_err(|e| e.to_string())?;
+    Ok(metadata)
 }
 
 #[tauri::command]
@@ -153,9 +150,13 @@ pub async fn save_metadata(
     let guard = state.sync.lock().await;
     let sync = guard.as_ref().ok_or("Not connected to Dropbox")?;
 
-    sync.save_metadata(&metadata)
+    // Fetch current rev before saving to enable conflict detection
+    let (_current, rev) = sync.fetch_metadata().await.map_err(|e| e.to_string())?;
+    let (updated, _new_rev) = sync
+        .save_metadata(&metadata, rev)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    Ok(updated)
 }
 
 #[tauri::command]
