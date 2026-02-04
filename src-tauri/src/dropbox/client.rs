@@ -94,24 +94,40 @@ impl DropboxClient {
     ) -> Result<FileMetadata, ClientError> {
         let token = self.get_token().await?;
 
-        let mode_json = match mode {
-            WriteMode::Add => serde_json::json!({ ".tag": "add" }),
-            WriteMode::Update(rev) => serde_json::json!({ ".tag": "update", "update": rev.0 }),
+        #[derive(Serialize)]
+        #[serde(tag = ".tag", rename_all = "lowercase")]
+        enum DropboxUploadMode<'a> {
+            Add,
+            Update { update: &'a Rev },
+        }
+
+        #[derive(Serialize)]
+        struct DropboxUploadArg<'a> {
+            path: &'a str,
+            mode: DropboxUploadMode<'a>,
+            autorename: bool,
+            mute: bool,
+            strict_conflict: bool,
+        }
+
+        let arg = DropboxUploadArg {
+            path,
+            mode: match mode {
+                WriteMode::Add => DropboxUploadMode::Add,
+                WriteMode::Update(ref rev) => DropboxUploadMode::Update { update: rev },
+            },
+            autorename: false,
+            mute: false,
+            strict_conflict: true,
         };
 
-        let arg = serde_json::json!({
-            "path": path,
-            "mode": mode_json,
-            "autorename": false,
-            "mute": false,
-            "strict_conflict": true,
-        });
+        let arg = serde_json::to_string(&arg)?;
 
         let response = self
             .http
             .post(format!("{}/files/upload", DROPBOX_CONTENT_BASE))
             .header("Authorization", format!("Bearer {}", token))
-            .header("Dropbox-API-Arg", arg.to_string())
+            .header("Dropbox-API-Arg", arg)
             .header("Content-Type", "application/octet-stream")
             .body(data.to_vec())
             .send()

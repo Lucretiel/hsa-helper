@@ -2,6 +2,7 @@ use super::client::{ClientError, DropboxClient, WriteMode};
 use crate::models::event::{HsaEvent, HsaMetadata};
 use crate::models::Rev;
 use jiff::Timestamp;
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -47,7 +48,7 @@ impl DropboxSync {
         let mut current_rev = rev;
 
         loop {
-            let data = serde_json::to_vec_pretty(&current)?;
+            let data = serde_json::to_vec(&current)?;
 
             let mode = match current_rev {
                 Some(r) => WriteMode::Update(r),
@@ -72,23 +73,25 @@ impl DropboxSync {
 
     fn reconcile(&self, local: &HsaMetadata, remote: &HsaMetadata) -> HsaMetadata {
         // Merge events by ID, keeping the most recently updated version
-        let mut events_map: HashMap<Uuid, HsaEvent> = HashMap::new();
 
         // Add all remote events
-        for event in &remote.events {
-            events_map.insert(event.id(), event.clone());
-        }
+        let mut events_map: HashMap<Uuid, HsaEvent> = remote
+            .events
+            .iter()
+            .map(|event| (event.id(), event.clone()))
+            .collect();
 
         // Merge local events, preferring newer updates
         for event in &local.events {
             let id = event.id();
-            if let Some(existing) = events_map.get(&id) {
-                // Keep the one with the newer updated_at
-                if event.updated_at() > existing.updated_at() {
-                    events_map.insert(id, event.clone());
+            match events_map.entry(id) {
+                Entry::Vacant(slot) => {
+                    slot.insert(event.clone());
                 }
-            } else {
-                events_map.insert(id, event.clone());
+                Entry::Occupied(mut remote) if event.updated_at() > remote.get().updated_at() => {
+                    remote.insert(event.clone());
+                }
+                Entry::Occupied(_) => {}
             }
         }
 
