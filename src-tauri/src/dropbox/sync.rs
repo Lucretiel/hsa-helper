@@ -43,33 +43,30 @@ impl DropboxSync {
         metadata: &HsaMetadata,
         rev: Option<Rev>,
     ) -> Result<(HsaMetadata, Rev), ClientError> {
-        let data = serde_json::to_vec_pretty(metadata)?;
+        let mut current = metadata.clone();
+        let mut current_rev = rev;
 
-        let mode = match rev {
-            Some(r) => WriteMode::Update(r),
-            None => WriteMode::Add,
-        };
+        loop {
+            let data = serde_json::to_vec_pretty(&current)?;
 
-        match self.client.upload_file(METADATA_PATH, &data, mode).await {
-            Ok(file_meta) => {
-                let mut updated = metadata.clone();
-                updated.last_modified = Timestamp::now();
-                Ok((updated, file_meta.rev))
+            let mode = match current_rev {
+                Some(r) => WriteMode::Update(r),
+                None => WriteMode::Add,
+            };
+
+            match self.client.upload_file(METADATA_PATH, &data, mode).await {
+                Ok(file_meta) => {
+                    current.last_modified = Timestamp::now();
+                    return Ok((current, file_meta.rev));
+                }
+                Err(ClientError::Conflict(_)) => {
+                    // Conflict! Fetch remote, reconcile, and retry
+                    let (remote, remote_rev) = self.fetch_metadata().await?;
+                    current = self.reconcile(&current, &remote);
+                    current_rev = remote_rev;
+                }
+                Err(e) => return Err(e),
             }
-            Err(ClientError::Conflict(_)) => {
-                // Conflict! Need to reconcile
-                let (remote, remote_rev) = self.fetch_metadata().await?;
-                let reconciled = self.reconcile(metadata, &remote);
-                // Try again with the reconciled data and new rev
-                let data = serde_json::to_vec_pretty(&reconciled)?;
-                let mode = match remote_rev {
-                    Some(r) => WriteMode::Update(r),
-                    None => WriteMode::Overwrite,
-                };
-                let file_meta = self.client.upload_file(METADATA_PATH, &data, mode).await?;
-                Ok((reconciled, file_meta.rev))
-            }
-            Err(e) => Err(e),
         }
     }
 

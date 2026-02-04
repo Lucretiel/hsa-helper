@@ -96,7 +96,6 @@ impl DropboxClient {
 
         let mode_json = match mode {
             WriteMode::Add => serde_json::json!({ ".tag": "add" }),
-            WriteMode::Overwrite => serde_json::json!({ ".tag": "overwrite" }),
             WriteMode::Update(rev) => serde_json::json!({ ".tag": "update", "update": rev.0 }),
         };
 
@@ -167,6 +166,5 @@ impl DropboxClient {
 #[derive(Debug, Clone)]
 pub enum WriteMode {
     Add,
-    Overwrite,
     Update(Rev),
 }
