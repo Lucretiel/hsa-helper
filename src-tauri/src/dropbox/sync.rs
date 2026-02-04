@@ -29,20 +29,28 @@ impl DropboxSync {
 
     /// Migrate data from legacy /Apps/HSAHelper/ paths to root paths.
     /// This is idempotent - safe to call multiple times.
-    pub async fn migrate_legacy_paths(&self) -> Result<(), ClientError> {
+    pub async fn migrate_legacy_paths(&self) {
         // Migrate metadata file if it exists at legacy path
-        let _ = self
+        if let Err(e) = self
             .client
             .move_file(LEGACY_METADATA_PATH, METADATA_PATH)
-            .await;
+            .await
+        {
+            if !matches!(e, ClientError::NotFound) {
+                eprintln!("Failed to migrate legacy metadata: {e}");
+            }
+        }
 
         // Migrate receipts folder if it exists at legacy path
-        let _ = self
+        if let Err(e) = self
             .client
             .move_file(LEGACY_RECEIPTS_PATH, RECEIPTS_PATH)
-            .await;
-
-        Ok(())
+            .await
+        {
+            if !matches!(e, ClientError::NotFound) {
+                eprintln!("Failed to migrate legacy receipts: {e}");
+            }
+        }
     }
 
     pub async fn fetch_metadata(&self) -> Result<(HsaMetadata, Option<Rev>), ClientError> {

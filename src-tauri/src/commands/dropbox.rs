@@ -72,7 +72,7 @@ pub async fn start_oauth_flow(
                             let client = DropboxClient::new(DropboxAuth::new());
                             let sync = DropboxSync::new(client);
                             // Migrate from legacy paths if needed
-                            let _ = sync.migrate_legacy_paths().await;
+                            sync.migrate_legacy_paths().await;
                             sync.ensure_folders().await.map_err(|e| {
                                 format!("Failed to initialize Dropbox folders: {}", e)
                             })?;
