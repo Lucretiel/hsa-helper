@@ -44,69 +44,65 @@ pub async fn start_oauth_flow(
     let app_handle = app.clone();
     let sync_state = state.sync.clone();
 
-    let oauth_window = WebviewWindowBuilder::new(
-        &app,
-        "oauth",
-        WebviewUrl::External(auth_url),
-    )
-    .title("Connect to Dropbox")
-    .inner_size(500.0, 700.0)
-    .center()
-    .on_navigation(move |url: &url::Url| {
-        if url.as_str().starts_with(REDIRECT_URI) {
-            // Extract the authorization code from the URL
-            if let Some(code) = url
-                .query_pairs()
-                .find(|(k, _)| k == "code")
-                .map(|(_, v)| v.to_string())
-            {
-                let app = app_handle.clone();
-                let sync_state = sync_state.clone();
-                let auth_completed = auth_completed_nav.clone();
-                let verifier = verifier.clone();
+    let oauth_window = WebviewWindowBuilder::new(&app, "oauth", WebviewUrl::External(auth_url))
+        .title("Connect to Dropbox")
+        .inner_size(500.0, 700.0)
+        .center()
+        .on_navigation(move |url: &url::Url| {
+            if url.as_str().starts_with(REDIRECT_URI) {
+                // Extract the authorization code from the URL
+                if let Some(code) = url
+                    .query_pairs()
+                    .find(|(k, _)| k == "code")
+                    .map(|(_, v)| v.to_string())
+                {
+                    let app = app_handle.clone();
+                    let sync_state = sync_state.clone();
+                    let auth_completed = auth_completed_nav.clone();
+                    let verifier = verifier.clone();
 
-                tauri::async_runtime::spawn(async move {
-                    let auth = DropboxAuth::new();
-                    let result: Result<(), String> = async {
-                        auth.exchange_code(&code, REDIRECT_URI, &verifier)
-                            .await
-                            .map_err(|e| e.to_string())?;
+                    tauri::async_runtime::spawn(async move {
+                        let auth = DropboxAuth::new();
+                        let result: Result<(), String> = async {
+                            auth.exchange_code(&code, REDIRECT_URI, &verifier)
+                                .await
+                                .map_err(|e| e.to_string())?;
 
-                        // Initialize the sync client
-                        let client = DropboxClient::new(DropboxAuth::new());
-                        let sync = DropboxSync::new(client);
-                        sync.ensure_folders()
-                            .await
-                            .map_err(|e| format!("Failed to initialize Dropbox folders: {}", e))?;
+                            // Initialize the sync client
+                            let client = DropboxClient::new(DropboxAuth::new());
+                            let sync = DropboxSync::new(client);
+                            sync.ensure_folders().await.map_err(|e| {
+                                format!("Failed to initialize Dropbox folders: {}", e)
+                            })?;
 
-                        *sync_state.lock().await = Some(sync);
-                        Ok(())
-                    }
-                    .await;
-
-                    match result {
-                        Ok(()) => {
-                            auth_completed.store(true, Ordering::SeqCst);
-                            let _ = app.emit("oauth-success", ());
+                            *sync_state.lock().await = Some(sync);
+                            Ok(())
                         }
-                        Err(e) => {
-                            let _ = app.emit("oauth-error", e);
+                        .await;
+
+                        match result {
+                            Ok(()) => {
+                                auth_completed.store(true, Ordering::SeqCst);
+                                let _ = app.emit("oauth-success", ());
+                            }
+                            Err(e) => {
+                                let _ = app.emit("oauth-error", e);
+                            }
                         }
-                    }
 
-                    // Close the OAuth window
-                    if let Some(window) = app.get_webview_window("oauth") {
-                        let _ = window.close();
-                    }
-                });
+                        // Close the OAuth window
+                        if let Some(window) = app.get_webview_window("oauth") {
+                            let _ = window.close();
+                        }
+                    });
 
-                return false; // Don't navigate to the callback URL
+                    return false; // Don't navigate to the callback URL
+                }
             }
-        }
-        true // Allow other navigations
-    })
-    .build()
-    .map_err(|e| e.to_string())?;
+            true // Allow other navigations
+        })
+        .build()
+        .map_err(|e| e.to_string())?;
 
     // Listen for window close to detect cancellation
     let app_for_close = app.clone();
