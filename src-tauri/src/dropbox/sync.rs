@@ -6,8 +6,12 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-const METADATA_PATH: &str = "/Apps/HSAHelper/metadata.json";
-const RECEIPTS_PATH: &str = "/Apps/HSAHelper/receipts";
+const METADATA_PATH: &str = "/metadata.json";
+const RECEIPTS_PATH: &str = "/receipts";
+
+// Legacy paths for migration
+const LEGACY_METADATA_PATH: &str = "/Apps/HSAHelper/metadata.json";
+const LEGACY_RECEIPTS_PATH: &str = "/Apps/HSAHelper/receipts";
 
 pub struct DropboxSync {
     client: DropboxClient,
@@ -19,9 +23,33 @@ impl DropboxSync {
     }
 
     pub async fn ensure_folders(&self) -> Result<(), ClientError> {
-        self.client.create_folder("/Apps").await.ok();
-        self.client.create_folder("/Apps/HSAHelper").await.ok();
         self.client.create_folder(RECEIPTS_PATH).await.ok();
+        Ok(())
+    }
+
+    /// Migrate data from legacy /Apps/HSAHelper/ paths to root paths.
+    /// This is idempotent - safe to call multiple times.
+    pub async fn migrate_legacy_paths(&self) -> Result<(), ClientError> {
+        // Migrate metadata file
+        if self.client.download_file(LEGACY_METADATA_PATH).await.is_ok() {
+            // Legacy metadata exists, move it
+            self.client
+                .move_file(LEGACY_METADATA_PATH, METADATA_PATH)
+                .await
+                .ok(); // Ignore errors (may already be moved)
+        }
+
+        // Migrate receipts folder
+        if self
+            .client
+            .move_file(LEGACY_RECEIPTS_PATH, RECEIPTS_PATH)
+            .await
+            .is_ok()
+        {
+            // Successfully moved, ensure the new folder exists for future uploads
+            self.client.create_folder(RECEIPTS_PATH).await.ok();
+        }
+
         Ok(())
     }
 

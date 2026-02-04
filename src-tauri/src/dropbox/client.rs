@@ -177,6 +177,37 @@ impl DropboxClient {
 
         Ok(())
     }
+
+    pub async fn move_file(&self, from: &str, to: &str) -> Result<(), ClientError> {
+        let token = self.get_token().await?;
+
+        let response = self
+            .http
+            .post(format!("{}/files/move_v2", DROPBOX_API_BASE))
+            .header("Authorization", format!("Bearer {}", token))
+            .header("Content-Type", "application/json")
+            .json(&serde_json::json!({
+                "from_path": from,
+                "to_path": to,
+            }))
+            .send()
+            .await?;
+
+        if response.status().as_u16() == 409 {
+            let error_text = response.text().await?;
+            if error_text.contains("not_found") {
+                return Err(ClientError::NotFound);
+            }
+            return Err(ClientError::Api(error_text));
+        }
+
+        if !response.status().is_success() {
+            let error_text = response.text().await?;
+            return Err(ClientError::Api(error_text));
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]

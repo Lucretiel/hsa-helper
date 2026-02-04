@@ -35,6 +35,8 @@ pub fn run() {
                 if auth.is_authenticated() {
                     let client = crate::dropbox::DropboxClient::new(auth);
                     let sync = crate::dropbox::sync::DropboxSync::new(client);
+                    // Migrate from legacy paths if needed, then ensure folders exist
+                    let _ = sync.migrate_legacy_paths().await;
                     if sync.ensure_folders().await.is_ok() {
                         *state_clone.lock().await = Some(sync);
                     }
