@@ -21,10 +21,6 @@ export async function setAppKey(appKey: string): Promise<void> {
 	return invoke("set_app_key", { appKey });
 }
 
-export async function isAuthenticated(): Promise<boolean> {
-	return invoke<boolean>("is_authenticated");
-}
-
 export async function getAuthUrl(redirectUri: string): Promise<string> {
 	return invoke<string>("get_auth_url", { redirectUri });
 }

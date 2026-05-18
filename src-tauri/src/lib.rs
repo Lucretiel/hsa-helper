@@ -3,11 +3,11 @@ mod dropbox;
 mod models;
 
 use commands::dropbox::{
-    download_receipt, is_authenticated, logout, save_metadata, start_oauth_flow, sync_metadata,
+    download_receipt, logout, save_metadata, start_oauth_flow, sync_metadata,
     upload_receipt, DropboxState,
 };
 use commands::events::{add_event, delete_event, get_events};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -18,7 +18,6 @@ pub fn run() {
             get_events,
             add_event,
             delete_event,
-            is_authenticated,
             start_oauth_flow,
             logout,
             sync_metadata,
@@ -29,17 +28,24 @@ pub fn run() {
         .setup(|app| {
             let dropbox_state = app.state::<DropboxState>();
             let state_clone = dropbox_state.inner().sync.clone();
+            let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 // Initialize dropbox connection if already authenticated
                 let auth = crate::dropbox::DropboxAuth::new();
-                if auth.is_authenticated() {
+                let authenticated = if auth.is_authenticated() {
                     let client = crate::dropbox::DropboxClient::new(auth);
                     let sync = crate::dropbox::sync::DropboxSync::new(client);
                     sync.migrate_legacy_paths().await;
                     if sync.ensure_folders().await.is_ok() {
                         *state_clone.lock().await = Some(sync);
+                        true
+                    } else {
+                        false
                     }
-                }
+                } else {
+                    false
+                };
+                let _ = handle.emit("auth-state-changed", authenticated);
             });
             Ok(())
         })

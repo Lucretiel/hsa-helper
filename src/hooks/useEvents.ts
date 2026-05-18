@@ -2,9 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import * as tauri from "../services/tauri";
 import type { HsaEvent, NewEvent } from "../services/types";
 
-export function useEvents() {
+export function useEvents(isAuthenticated: boolean) {
 	const [events, setEvents] = useState<HsaEvent[]>([]);
-	const [isLoading, setIsLoading] = useState(true);
+	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<Error | null>(null);
 
 	const loadEvents = useCallback(async () => {
@@ -21,8 +21,12 @@ export function useEvents() {
 	}, []);
 
 	useEffect(() => {
-		loadEvents();
-	}, [loadEvents]);
+		if (isAuthenticated) {
+			loadEvents();
+		} else {
+			setEvents([]);
+		}
+	}, [isAuthenticated, loadEvents]);
 
 	const addEvent = useCallback(async (event: NewEvent) => {
 		const newEvent = await tauri.addEvent(event);

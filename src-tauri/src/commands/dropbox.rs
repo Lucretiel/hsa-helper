@@ -85,7 +85,7 @@ pub async fn start_oauth_flow(
                         match result {
                             Ok(()) => {
                                 auth_completed.store(true, Ordering::SeqCst);
-                                let _ = app.emit("oauth-success", ());
+                                let _ = app.emit("auth-state-changed", true);
                             }
                             Err(e) => {
                                 let _ = app.emit("oauth-error", e);
@@ -120,14 +120,10 @@ pub async fn start_oauth_flow(
 }
 
 #[tauri::command]
-pub fn is_authenticated(state: State<DropboxState>) -> bool {
-    state.auth().is_authenticated()
-}
-
-#[tauri::command]
-pub async fn logout(state: State<'_, DropboxState>) -> Result<(), String> {
+pub async fn logout(app: AppHandle, state: State<'_, DropboxState>) -> Result<(), String> {
     state.auth().clear_tokens().map_err(|e| e.to_string())?;
     *state.sync.lock().await = None;
+    let _ = app.emit("auth-state-changed", false);
     Ok(())
 }
 

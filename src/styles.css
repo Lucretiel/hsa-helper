@@ -50,6 +50,11 @@ body {
 	gap: 1rem;
 }
 
+.header-action {
+	display: flex;
+	gap: 0.5rem;
+}
+
 .summary {
 	display: flex;
 	gap: 2rem;
@@ -65,6 +70,19 @@ body {
 	font-size: 0.75rem;
 	color: var(--text-secondary);
 	text-transform: uppercase;
+}
+
+.year-select {
+	font-size: inherit;
+	text-transform: inherit;
+	appearance: none;
+	-webkit-appearance: none;
+	background: var(--bg-secondary);
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	color: inherit;
+	cursor: pointer;
+	padding: 0.1em 0.4em;
 }
 
 .summary-value {

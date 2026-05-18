@@ -1,4 +1,6 @@
-import { useCallback, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { useCallback, useEffect, useState } from "react";
 import { DropboxAuth } from "./components/DropboxAuth";
 import { EventForm } from "./components/EventForm";
 import { EventList } from "./components/EventList";
@@ -7,9 +9,12 @@ import { Layout } from "./components/Layout";
 import { PdfViewer } from "./components/PdfViewer";
 import { useEvents } from "./hooks/useEvents";
 
+type AuthState = "loading" | "authenticated" | "unauthenticated";
+
 function App() {
-	const [isAuthenticated, setIsAuthenticated] = useState(false);
-	const { events, addEvent, isLoading, refresh } = useEvents();
+	const [authState, setAuthState] = useState<AuthState>("loading");
+	const isAuthenticated = authState === "authenticated";
+	const { events, addEvent, isLoading } = useEvents(isAuthenticated);
 	const [showForm, setShowForm] = useState(false);
 	const [viewingReceiptId, setViewingReceiptId] = useState<string | null>(null);
 	const [filters, setFilters] = useState<FilterState>({
@@ -18,10 +23,22 @@ function App() {
 		endDate: null,
 	});
 
-	const handleAuthenticated = useCallback(() => {
-		setIsAuthenticated(true);
-		refresh();
-	}, [refresh]);
+	useEffect(() => {
+		const unlisten = listen<boolean>("auth-state-changed", (event) => {
+			setAuthState(event.payload ? "authenticated" : "unauthenticated");
+		});
+		return () => {
+			unlisten.then((fn) => fn());
+		};
+	}, []);
+
+	const handleLogout = useCallback(async () => {
+		try {
+			await invoke("logout");
+		} catch (err) {
+			console.error("Logout failed:", err);
+		}
+	}, []);
 
 	const filteredEvents = events.filter((event) => {
 		if (
@@ -39,26 +56,43 @@ function App() {
 		return true;
 	});
 
-	if (!isAuthenticated) {
+	if (authState === "loading") {
 		return (
 			<Layout events={[]}>
-				<DropboxAuth onAuthenticated={handleAuthenticated} />
+				<div className="loading">Connecting...</div>
 			</Layout>
 		);
 	}
 
-	const addEventButton = (
-		<button
-			type="button"
-			className="btn btn-primary"
-			onClick={() => setShowForm(!showForm)}
-		>
-			{showForm ? "Cancel" : "Add Event"}
-		</button>
+	if (authState === "unauthenticated") {
+		return (
+			<Layout events={[]}>
+				<DropboxAuth />
+			</Layout>
+		);
+	}
+
+	const headerActions = (
+		<>
+			<button
+				type="button"
+				className="btn btn-primary"
+				onClick={() => setShowForm(!showForm)}
+			>
+				{showForm ? "Cancel" : "Add Event"}
+			</button>
+			<button
+				type="button"
+				className="btn btn-secondary"
+				onClick={handleLogout}
+			>
+				Sign Out
+			</button>
+		</>
 	);
 
 	return (
-		<Layout events={events} headerAction={addEventButton}>
+		<Layout events={events} headerAction={headerActions}>
 			<div className="app-content">
 				{showForm && (
 					<EventForm

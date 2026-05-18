@@ -1,56 +1,28 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
-interface DropboxAuthProps {
-	onAuthenticated: () => void;
-}
+type AuthStep = "ready" | "authenticating";
 
-type AuthStep = "loading" | "authenticate" | "authenticating" | "authenticated";
-
-export function DropboxAuth({ onAuthenticated }: DropboxAuthProps) {
-	const [step, setStep] = useState<AuthStep>("loading");
+export function DropboxAuth() {
+	const [step, setStep] = useState<AuthStep>("ready");
 	const [error, setError] = useState<string | null>(null);
 
-	const checkStatus = useCallback(async () => {
-		try {
-			const authenticated = await invoke<boolean>("is_authenticated");
-			if (authenticated) {
-				setStep("authenticated");
-				onAuthenticated();
-			} else {
-				setStep("authenticate");
-			}
-		} catch (err) {
-			console.error("Status check failed:", err);
-			setStep("authenticate");
-		}
-	}, [onAuthenticated]);
-
 	useEffect(() => {
-		checkStatus();
-
-		// Listen for OAuth events from the backend
-		const unlistenSuccess = listen("oauth-success", () => {
-			setStep("authenticated");
-			onAuthenticated();
-		});
-
 		const unlistenError = listen<string>("oauth-error", (event) => {
 			setError(event.payload);
-			setStep("authenticate");
+			setStep("ready");
 		});
 
 		const unlistenCancelled = listen("oauth-cancelled", () => {
-			setStep("authenticate");
+			setStep("ready");
 		});
 
 		return () => {
-			unlistenSuccess.then((fn) => fn());
 			unlistenError.then((fn) => fn());
 			unlistenCancelled.then((fn) => fn());
 		};
-	}, [onAuthenticated, checkStatus]);
+	}, []);
 
 	const startAuth = async () => {
 		setError(null);
@@ -59,37 +31,9 @@ export function DropboxAuth({ onAuthenticated }: DropboxAuthProps) {
 			await invoke("start_oauth_flow");
 		} catch (err) {
 			setError(String(err));
-			setStep("authenticate");
+			setStep("ready");
 		}
 	};
-
-	const handleLogout = async () => {
-		try {
-			await invoke("logout");
-			setStep("authenticate");
-		} catch (err) {
-			setError(String(err));
-		}
-	};
-
-	if (step === "loading") {
-		return <div className="loading">Checking configuration...</div>;
-	}
-
-	if (step === "authenticated") {
-		return (
-			<div className="dropbox-auth authenticated">
-				<p>Connected to Dropbox</p>
-				<button
-					type="button"
-					className="btn btn-secondary"
-					onClick={handleLogout}
-				>
-					Disconnect
-				</button>
-			</div>
-		);
-	}
 
 	if (step === "authenticating") {
 		return (
