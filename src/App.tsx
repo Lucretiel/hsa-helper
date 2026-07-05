@@ -14,7 +14,8 @@ type AuthState = "loading" | "authenticated" | "unauthenticated";
 function App() {
 	const [authState, setAuthState] = useState<AuthState>("loading");
 	const isAuthenticated = authState === "authenticated";
-	const { events, addEvent, isLoading } = useEvents(isAuthenticated);
+	const { events, addEvent, isLoading, deleteEvent } =
+		useEvents(isAuthenticated);
 	const [showForm, setShowForm] = useState(false);
 	const [viewingReceiptId, setViewingReceiptId] = useState<string | null>(null);
 	const [filters, setFilters] = useState<FilterState>({
@@ -116,6 +117,7 @@ function App() {
 						filters={filters}
 						hasAnyEvents={events.length > 0}
 						onViewReceipt={setViewingReceiptId}
+						onDeleteEvent={deleteEvent}
 					/>
 				)}
 			</div>

@@ -6,7 +6,8 @@ interface EventListProps {
 	events: HsaEvent[];
 	filters?: FilterState;
 	hasAnyEvents: boolean;
-	onViewReceipt?: (receiptId: string) => void;
+	onViewReceipt: (receiptId: string) => void;
+	onDeleteEvent: (id: string) => void;
 }
 
 function formatTypeList(types: EventType[]): string {
@@ -65,6 +66,7 @@ export function EventList({
 	events,
 	filters,
 	hasAnyEvents,
+	onDeleteEvent,
 	onViewReceipt,
 }: EventListProps) {
 	if (events.length === 0) {
@@ -83,9 +85,23 @@ export function EventList({
 
 	return (
 		<div className="event-list">
-			{sortedEvents.map((event) => (
-				<EventCard key={event.id} event={event} onViewReceipt={onViewReceipt} />
-			))}
+			{sortedEvents.map((event) => {
+				const id = event.id;
+				const receiptId = event.receiptId;
+				const viewReceipt = receiptId
+					? () => onViewReceipt(receiptId)
+					: undefined;
+				const deleteEvent = () => onDeleteEvent(id);
+
+				return (
+					<EventCard
+						key={id}
+						event={event}
+						onViewReceipt={viewReceipt}
+						onDeleteEvent={deleteEvent}
+					/>
+				);
+			})}
 		</div>
 	);
 }
